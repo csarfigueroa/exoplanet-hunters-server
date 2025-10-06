@@ -10,6 +10,19 @@ class ExoplanetDataProcessor:
         self.scaler = StandardScaler()
         self.label_encoder = LabelEncoder()
         self.feature_columns = []
+        # Mapeo de columnas KOI a formato estándar
+        self.column_mapping = {
+            'koi_period': 'pl_orbper',
+            'koi_duration': 'pl_trandurh',
+            'koi_depth': 'pl_trandep',
+            'koi_prad': 'pl_rade',
+            'koi_insol': 'pl_insol',
+            'koi_teq': 'pl_eqt',
+            'koi_kepmag': 'st_tmag',
+            'koi_steff': 'st_teff',
+            'koi_slogg': 'st_logg',
+            'koi_srad': 'st_rad'
+        }
 
     def load_data(self, data_path="data/"):
         """Load and preprocess the exoplanet data from all CSV files in the data folder"""
@@ -27,6 +40,19 @@ class ExoplanetDataProcessor:
                 for csv_file in csv_files:
                     try:
                         df = pd.read_csv(csv_file, comment='#')
+                        # Renombrar columnas KOI al formato estándar si existen
+                        df = df.rename(columns=self.column_mapping)
+                        
+                        # Manejar columna de disposición para archivos KOI
+                        if 'koi_disposition' in df.columns and 'tfopwg_disp' not in df.columns:
+                            # Mapear valores de koi_disposition a formato tfopwg_disp
+                            df['tfopwg_disp'] = df['koi_disposition'].map({
+                                'CONFIRMED': 'CP',
+                                'CANDIDATE': 'PC',
+                                'FALSE POSITIVE': 'FP'
+                            })
+                            print(f"  Mapped koi_disposition to tfopwg_disp")
+                        
                         dataframes.append(df)
                         print(f"Loaded {len(df)} rows from {os.path.basename(csv_file)}")
                     except Exception as file_error:
@@ -43,13 +69,26 @@ class ExoplanetDataProcessor:
             else:
                 # Single file path provided
                 df = pd.read_csv(data_path, comment='#')
+                # Renombrar columnas KOI al formato estándar si existen
+                df = df.rename(columns=self.column_mapping)
+                
+                # Manejar columna de disposición para archivos KOI
+                if 'koi_disposition' in df.columns and 'tfopwg_disp' not in df.columns:
+                    # Mapear valores de koi_disposition a formato tfopwg_disp
+                    df['tfopwg_disp'] = df['koi_disposition'].map({
+                        'CONFIRMED': 'CP',
+                        'CANDIDATE': 'PC',
+                        'FALSE POSITIVE': 'FP'
+                    })
+                    print(f"  Mapped koi_disposition to tfopwg_disp")
+                
                 print(f"Loaded single file: {len(df)} rows")
 
             # Select relevant numerical features for classification
             feature_cols = [
-                'ra', 'dec', 'st_pmra', 'st_pmdec', 'pl_orbper', 'pl_trandurh',
+                'pl_orbper', 'pl_trandurh',
                 'pl_trandep', 'pl_rade', 'pl_insol', 'pl_eqt', 'st_tmag',
-                'st_dist', 'st_teff', 'st_logg', 'st_rad'
+                'st_teff', 'st_logg', 'st_rad'
             ]
 
             # Filter columns that exist in the dataset
