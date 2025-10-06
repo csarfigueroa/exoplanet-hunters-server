@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import pickle
+import os
 from app.services.data_processor import ExoplanetDataProcessor
 
 class ExoplanetClassifier(nn.Module):
@@ -36,6 +38,16 @@ class ExoplanetNeuralNetworkService:
         self.test_accuracy = 0.0
         self.input_size = 0
         self.scaler_fitted = False
+
+        # Rutas para guardar el modelo
+        self.model_path = "saved_models/exoplanet_model.pth"
+        self.scaler_path = "saved_models/scaler.pkl"
+
+        # Crear directorio si no existe
+        os.makedirs("saved_models", exist_ok=True)
+
+        # Intentar cargar modelo existente
+        self.load_model()
 
     def train_model(self, epochs=100, learning_rate=0.001, batch_size=64):
         try:
@@ -122,6 +134,10 @@ class ExoplanetNeuralNetworkService:
             exoplanet_precision = exoplanet_correct / max(1, (test_predicted == 1).sum().item())
             exoplanet_recall = exoplanet_correct / max(1, exoplanet_total)
 
+            # Guardar el modelo entrenado
+            print("\nGuardando modelo entrenado...")
+            self.save_model()
+
             return {
                 "message": "Exoplanet classification model trained successfully",
                 "objective": "Binary classification: Exoplanet (1) vs Non-Exoplanet (0)",
@@ -134,7 +150,9 @@ class ExoplanetNeuralNetworkService:
                 "training_samples": len(X_train),
                 "test_samples": len(X_test),
                 "features_used": self.data_processor.feature_columns,
-                "data_info": self.data_processor.get_data_info()
+                "data_info": self.data_processor.get_data_info(),
+                "model_saved": True,
+                "model_path": self.model_path
             }
 
         except Exception as e:
@@ -241,3 +259,63 @@ class ExoplanetNeuralNetworkService:
             "objective": "Binary classification: Confirmed Exoplanet vs Non-Confirmed",
             "data_source": "TESS Objects of Interest (TOI) catalog"
         }
+
+    def save_model(self):
+        """Guardar el modelo entrenado y el scaler en disco"""
+        try:
+            # Guardar estado del modelo
+            torch.save({
+                'model_state_dict': self.model.state_dict(),
+                'input_size': self.input_size,
+                'training_accuracy': self.training_accuracy,
+                'test_accuracy': self.test_accuracy,
+                'feature_columns': self.data_processor.feature_columns
+            }, self.model_path)
+
+            # Guardar scaler
+            with open(self.scaler_path, 'wb') as f:
+                pickle.dump(self.data_processor.scaler, f)
+
+            print(f"✓ Modelo guardado en {self.model_path}")
+            print(f"✓ Scaler guardado en {self.scaler_path}")
+            return True
+        except Exception as e:
+            print(f"⚠ Error al guardar modelo: {str(e)}")
+            return False
+
+    def load_model(self):
+        """Cargar un modelo previamente entrenado desde disco"""
+        try:
+            if os.path.exists(self.model_path) and os.path.exists(self.scaler_path):
+                print(f"\n🔄 Cargando modelo existente desde {self.model_path}...")
+
+                # Cargar checkpoint del modelo
+                checkpoint = torch.load(self.model_path)
+                self.input_size = checkpoint['input_size']
+                self.training_accuracy = checkpoint['training_accuracy']
+                self.test_accuracy = checkpoint['test_accuracy']
+                self.data_processor.feature_columns = checkpoint['feature_columns']
+
+                # Inicializar y cargar el modelo
+                self.model = ExoplanetClassifier(input_size=self.input_size)
+                self.model.load_state_dict(checkpoint['model_state_dict'])
+                self.model.eval()
+
+                # Cargar scaler
+                with open(self.scaler_path, 'rb') as f:
+                    self.data_processor.scaler = pickle.load(f)
+
+                self.trained = True
+                self.scaler_fitted = True
+
+                print(f"✓ Modelo cargado exitosamente")
+                print(f"  - Training accuracy: {self.training_accuracy * 100:.2f}%")
+                print(f"  - Test accuracy: {self.test_accuracy * 100:.2f}%")
+                print(f"  - Features: {len(self.data_processor.feature_columns)}")
+                return True
+            else:
+                print(f"\nℹ No se encontró modelo guardado. Entrena el modelo con POST /exoplanet/train")
+                return False
+        except Exception as e:
+            print(f"⚠ No se pudo cargar el modelo: {str(e)}")
+            return False
