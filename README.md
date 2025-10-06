@@ -314,4 +314,10 @@ curl http://localhost:8000
 
 ---
 
+## Relevant notes
+Acknowledgment: The repository and project documentation include attribution lines such as
+Co-Authored-By: Claude <noreply@anthropic.com>
+to indicate AI assistance in code generation.
+
+
 *This system demonstrates how artificial intelligence can assist in astronomical discovery, helping identify potentially habitable worlds beyond our solar system.*
